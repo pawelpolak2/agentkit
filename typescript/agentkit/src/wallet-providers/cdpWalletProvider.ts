@@ -298,7 +298,9 @@ export class CdpWalletProvider extends EvmWalletProvider {
 
       return tx.transactionHash as `0x${string}`;
     })();
-    this.#transactionQueue = sendPromise.then(txHash => this.waitForTransactionReceipt(txHash));
+    this.#transactionQueue = sendPromise
+      .then(txHash => this.waitForTransactionReceipt(txHash))
+      .catch(() => {});
     return await sendPromise;
   }
 
