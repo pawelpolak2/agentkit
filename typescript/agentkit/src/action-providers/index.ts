@@ -25,3 +25,4 @@ export * from "./weth";
 export * from "./wow";
 export * from "./allora";
 export * from "./onramp";
+export * from "./vaultsfyi";
