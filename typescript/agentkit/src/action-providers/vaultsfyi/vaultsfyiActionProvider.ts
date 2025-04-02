@@ -200,7 +200,7 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     name: "deposit",
     description: `
       This action deposits assets into a selected vault. Before depositing make sure you have the required assets in your wallet using the wallet-balances action.
-      Even if you received the balance from some other source, double-check the balance before depositing.
+      Even if you received the balance from some other source, double-check the user balance and vault transactional status before depositing.
       To use this action the vault MUST BE TRANSACTIONAL. You can check if a vault is transactional by looking at the isTransactional field in the vaults action.
       Use examples:
       User: "Deposit 1000 USDC into the vault"
