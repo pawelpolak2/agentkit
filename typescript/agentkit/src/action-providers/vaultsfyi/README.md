@@ -4,7 +4,7 @@ This directory contains the **VaultsfyiActionProvider** implementation, which pr
 
 ## Overview
 
-The VaultsfyiActionProvider is designed to work with EvmWalletProvider for blockchain interactions. It provides a set of actions that enable [describe the main purpose/functionality].
+The VaultsfyiActionProvider is designed to work with EvmWalletProvider for blockchain interactions. It provides a set of actions that enable users to interact with onchain yield opportunities.
 
 ## Directory Structure
 
@@ -13,32 +13,26 @@ vaultsfyi/
 ├── vaultsfyiActionProvider.ts       # Main provider implementation
 └── vaultsfyiActionProvider.test.ts  # Provider test suite
 ├── schemas.ts                      # Action schemas and types
+├── constants.ts                    # Provider constants
+├── utils.ts                        # Provider utility functions
+├── /api
+    ├── actions.ts                  # vaultsfyi transactional API actions
+    ├── types.ts                    # vaultsfyi API types
+    ├── vaults.ts                   # vaults list getter
 ├── index.ts                        # Package exports
 └── README.md                       # Documentation (this file)
 ```
 
 ## Actions
+- `vaults`: Get the list of available vaults on vaultsfyi.
+- `deposit`: Deposit assets into a vault.
+- `redeem`: Redeem assets from a vault.
+- `claim`: Claim rewards from a vault.
+- `user-wallet-balances`: Get the user's native token and compatible ERC20 token balances.
+- `positions`: Get the user's positions in vaults.
 
-### Example Action
-- `example-action`: Template action implementation
-  - **Purpose**: Demonstrates the basic structure of an action
-  - **Input**:
-    - `fieldName` (string): A descriptive name for the field (1-100 chars)
-    - `amount` (string): The amount as a decimal string (e.g. "1.5")
-    - `optionalField` (string, optional): Optional parameter example
-  - **Output**: String describing the action result
-  - **Example**:
-    ```typescript
-    const result = await provider.exampleAction(walletProvider, {
-      fieldName: "test",
-      amount: "1.0"
-    });
-    ```
-
-## Implementation Details
-
-### Network Support
-This provider supports all evm networks.
+## Network Support
+This provider supports selected evm networks.
 
 ### Wallet Provider Integration
 This provider is specifically designed to work with EvmWalletProvider. Key integration points:
@@ -51,34 +45,9 @@ This provider is specifically designed to work with EvmWalletProvider. Key integ
 To add new actions:
 
 1. Define the schema in `schemas.ts`:
-   ```typescript
-   export const NewActionSchema = z.object({
-     // Define your action's parameters
-   });
-   ```
-
 2. Implement the action in `vaultsfyiActionProvider.ts`:
-   ```typescript
-   @CreateAction({
-     name: "new_action",
-     description: "Description of what your action does",
-     schema: NewActionSchema,
-   })
-   async newAction(
-walletProvider: EvmWalletProvider,      args: z.infer<typeof NewActionSchema>
-   ): Promise<string> {
-     // Implement your action logic
-   }
-   ```
-
-## Testing
-
-When implementing new actions, ensure to:
-1. Add unit tests for schema validations
-2. Test network support
+3. Add tests in `vaultsfyiActionProvider.test.ts`:
 
 ## Notes
 
-- Add any specific considerations for this action provider
-- Document any prerequisites or setup requirements
-- Include relevant external documentation links
+[Vaults.fyi API docs](https://docs.vaults.fyi/api/vaults.fyi-api-overview)
