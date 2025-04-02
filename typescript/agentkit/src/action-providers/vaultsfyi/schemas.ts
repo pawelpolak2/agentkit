@@ -76,15 +76,15 @@ export const vaultsActionSchema = z.object({
 });
 
 /**
- * Deposit action schema.
+ * Base transaction params schema.
  */
-export const depositActionSchema = z.object({
+const transactionActionSchema = z.object({
   /**
-   * The address of the vault to deposit to
+   * The address of the vault to interact with
    */
   vaultAddress: z.string(),
   /**
-   * The address of the token to deposit
+   * The address of the vaults underlying token
    */
   assetAddress: z.string(),
   /**
@@ -92,45 +92,18 @@ export const depositActionSchema = z.object({
    */
   network: networkSchema,
   /**
-   * The amount of assets to deposit
+   * The amount of assets to use
    */
   amount: z.number(),
 });
 
-export const redeemActionSchema = z.object({
-  /**
-   * The address of the vault to redeem from
-   */
-  vaultAddress: z.string(),
-  /**
-   * The address of the token to redeem
-   */
-  assetAddress: z.string(),
-  /**
-   * The network of the vault
-   */
-  network: networkSchema,
-  /**
-   * The amount of assets to redeem
-   */
-  lpAmount: z.number(),
+export const depositActionSchema = transactionActionSchema;
+export const redeemActionSchema = transactionActionSchema.extend({
   /**
    * Should redeem all assets
    */
   all: z.boolean().optional(),
 });
-
-export const claimActionSchema = z.object({
-  /**
-   * The address of the vault to claim from
-   */
-  vaultAddress: z.string(),
-  /**
-   * The address of the vaults token
-   */
-  assetAddress: z.string(),
-  /**
-   * The network of the vault
-   */
-  network: networkSchema,
+export const claimActionSchema = transactionActionSchema.omit({
+  amount: true,
 });

@@ -18,16 +18,12 @@ import {
   redeemActionSchema,
   vaultsActionSchema,
 } from "./schemas";
-import { getVaultsLink } from "./utils";
-import { ApiVault, Vault } from "./types/vault";
-import { VAULTS_FYI_PROTOCOLS } from "./types/protocols";
-import { VAULTS_NETWORKS } from "./networks";
-import { Address, erc20Abi } from "viem";
-import { Positions } from "./types/positions";
-import { Balances } from "./types/balances";
-import { Actions } from "./types/actions";
-
-const VAULTS_API_URL = "https://api.vaults.fyi/v1";
+import { executeActions, getVaultsLink, parseAssetAmount } from "./utils";
+import { VAULTS_NETWORKS } from "./constants";
+import { fetchVaultActions } from "./api/actions";
+import { fetchVaults } from "./api/vaults";
+import { VAULTS_API_URL } from "./constants";
+import { ApiError, Balances, Positions } from "./api/types";
 
 /**
  * Configuration options for the OpenseaActionProvider.
@@ -48,10 +44,11 @@ export interface VaultsfyiActionProviderConfig {
  */
 export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
   private readonly apiKey: string;
+
   /**
    * Constructor for the VaultsfyiActionProvider.
    *
-   * @param config
+   * @param config - Configuration options for the provider
    */
   constructor(config: VaultsfyiActionProviderConfig = {}) {
     super("vaultsfyi", []);
@@ -65,12 +62,8 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
   /**
    * vaults action
    *
-   * @description
-   * Gets a list of available vaults.
-   * @param args
-   *
    * @param wallet - The wallet provider instance for blockchain interactions
-   * @param params - Input arguments: token, network, transactionalOnly
+   * @param args - Input arguments: token, network, transactionalOnly...
    * @returns A list of vaults.
    */
   @CreateAction({
@@ -139,103 +132,76 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     wallet: EvmWalletProvider,
     args: z.infer<typeof vaultsActionSchema>,
   ): Promise<string> {
-    console.log("args", args);
-    console.log(wallet.getNetwork());
-    if (args.protocol && !VAULTS_FYI_PROTOCOLS.includes(args.protocol)) {
-      return `Invalid protocol. Supported protocols: ${VAULTS_FYI_PROTOCOLS.join(", ")}`;
+    const vaults = await fetchVaults(args, this.apiKey);
+    if ("error" in vaults) {
+      return `Failed to fetch vaults: ${vaults.error}, ${vaults.message}`;
     }
-    const vaults: Vault[] = [];
+    if (args.protocol && !vaults.find(vault => vault.protocol === args.protocol)) {
+      const supportedProtocols = vaults
+        .map(vault => vault.protocol)
+        .filter((value, index, self) => self.indexOf(value) === index);
+      return `Protocol ${args.protocol} is not supported. Supported protocols are: ${supportedProtocols.join(", ")}`;
+    }
 
-    const params = new URLSearchParams({
-      per_page: "250",
-    });
-    if (args.token) params.append("token", args.token);
-    if (args.network) params.append("network", args.network);
-    params.append("tvl_min", args.minTvl?.toString() ?? "100000");
-    if (args.transactionalOnly)
-      params.append("transactionalOnly", args.transactionalOnly.toString());
-    try {
-      while (true) {
-        const result = await fetch(`${VAULTS_API_URL}/detailed/vaults?${params.toString()}`, {
-          method: "GET",
-          headers: {
-            "x-api-key": this.apiKey,
-          },
-        });
-        const data = (await result.json()) as {
-          next_page: string | undefined;
-          data: ApiVault[];
-        };
-        if (!data.data) break;
-        vaults.push(
-          ...data.data
-            .filter(vault => (args.protocol ? vault.protocol === args.protocol : true))
-            .map(vault => ({
-              name: vault.name,
-              address: vault.address,
-              network: vault.network,
-              protocol: vault.protocol,
-              tvlInUsd: Number(vault.tvlDetails.tvlUsd),
-              apy: {
-                base: vault.apy.base["7day"] / 100,
-                rewards: vault.apy.rewards?.["7day"] ? vault.apy.rewards["7day"] / 100 : undefined,
-                total: vault.apy.total["7day"] / 100,
-              },
-              token: {
-                address: vault.token.assetAddress,
-                name: vault.token.name,
-                symbol: vault.token.symbol,
-              },
-              link: getVaultsLink(vault),
-              isTransactional: vault.isTransactional,
-            })),
-        );
-        if (!data.next_page) break;
-        else params.set("page", data.next_page);
+    const transformedVaults = vaults.map(vault => ({
+      name: vault.name,
+      address: vault.address,
+      network: vault.network,
+      protocol: vault.protocol,
+      tvlInUsd: Number(vault.tvlDetails.tvlUsd),
+      apy: {
+        base: vault.apy.base["7day"] / 100,
+        rewards: vault.apy.rewards?.["7day"] ? vault.apy.rewards["7day"] / 100 : undefined,
+        total: vault.apy.total["7day"] / 100,
+      },
+      token: {
+        address: vault.token.assetAddress,
+        name: vault.token.name,
+        symbol: vault.token.symbol,
+      },
+      link: getVaultsLink(vault),
+      isTransactional: vault.isTransactional,
+    }));
+
+    const filteredVaults = transformedVaults.filter(vault =>
+      args.protocol ? vault.protocol === args.protocol : true,
+    );
+    const sortedVaults = filteredVaults.sort((a, b) => {
+      if (args.sort?.field === "tvl") {
+        return args.sort.direction === "asc" ? a.tvlInUsd - b.tvlInUsd : b.tvlInUsd - a.tvlInUsd;
+      } else if (args.sort?.field === "apy") {
+        return args.sort.direction === "asc"
+          ? a.apy.total - b.apy.total
+          : b.apy.total - a.apy.total;
       }
-    } catch (error) {
-      console.error("Error fetching vaults", error);
-      return "Error fetching vaults";
-    }
-    // sort vaults
-    const sortParams = args.sort;
-    if (sortParams) {
-      vaults.sort((a, b) => {
-        if (sortParams.field === "tvl") {
-          return sortParams.direction === "asc" ? a.tvlInUsd - b.tvlInUsd : b.tvlInUsd - a.tvlInUsd;
-        } else if (sortParams.field === "apy") {
-          return sortParams.direction === "asc"
-            ? a.apy.total - b.apy.total
-            : b.apy.total - a.apy.total;
-        } else {
-          return a.name.localeCompare(b.name);
-        }
-      });
-    }
+      return a.name.localeCompare(b.name);
+    });
 
-    // pagination
     const take = args.take || 10;
     const page = args.page || 1;
     const start = (page - 1) * take;
     const end = start + take;
-    const results = vaults.slice(start, end);
+    const results = sortedVaults.slice(start, end);
     return JSON.stringify({
-      totalResults: vaults.length,
-      nextPage: end < vaults.length,
+      totalResults: sortedVaults.length,
+      nextPage: end < sortedVaults.length,
       results,
     });
   }
 
   /**
+   * Deposit action
    *
-   * @param wallet
-   * @param args
+   * @param wallet - The wallet provider instance for blockchain interactions
+   * @param args - Input arguments
+   * @returns A result message
    */
   @CreateAction({
     name: "deposit",
     description: `
       This action deposits assets into a selected vault. Before depositing make sure you have the required assets in your wallet using the wallet-balances action.
       Even if you received the balance from some other source, double-check the balance before depositing.
+      To use this action the vault MUST BE TRANSACTIONAL. You can check if a vault is transactional by looking at the isTransactional field in the vaults action.
       Use examples:
       User: "Deposit 1000 USDC into the vault"
       actions:
@@ -260,59 +226,33 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     wallet: EvmWalletProvider,
     args: z.infer<typeof depositActionSchema>,
   ): Promise<string> {
-    try {
-      console.log(args);
-      const chainId = wallet.getNetwork().chainId;
-      if (!chainId) return "Chain not set";
-      if (VAULTS_NETWORKS[chainId] !== args.network)
-        return `You are on the wrong network. Your network: ${VAULTS_NETWORKS[chainId]}, vault network: ${args.network}`;
-      const decimals = await wallet.readContract({
-        address: args.assetAddress as Address,
-        abi: erc20Abi,
-        functionName: "decimals",
-      });
-      const parsedAmount = BigInt(Math.floor(args.amount * 10 ** decimals));
-      const params = new URLSearchParams({
-        network: args.network,
-        vaultAddress: args.vaultAddress,
-        assetAddress: args.assetAddress,
-        sender: wallet.getAddress(),
-        amount: parsedAmount.toString(),
-      });
-      const apiResult = await fetch(
-        `${VAULTS_API_URL}/transactions/vaults/deposit?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "x-api-key": this.apiKey,
-          },
-        },
-      );
-      const actions = await apiResult.json();
-      const actionsAmount = actions.actions?.length || 0;
-      for (let i = actions.currentActionIndex; i < actionsAmount; i++) {
-        const action = actions.actions[i];
-        await wallet.sendTransaction({
-          ...action.tx,
-          value: action.tx.value ? BigInt(action.tx.value) : undefined,
-        });
-      }
-      return "Deposit successful";
-    } catch (error) {
-      console.error("Error during deposit:", error);
-      return "Error during deposit";
+    const actions = await fetchVaultActions({
+      action: "deposit",
+      args: { ...args, amount: await parseAssetAmount(wallet, args.assetAddress, args.amount) },
+      sender: wallet.getAddress(),
+      apiKey: this.apiKey,
+    });
+    if ("error" in actions) {
+      return `Failed to fetch deposit transactions: ${actions.error}, ${actions.message}`;
     }
+
+    await executeActions(wallet, actions);
+
+    return "Deposit successful";
   }
 
   /**
+   * Redeem action
    *
-   * @param wallet
-   * @param args
+   * @param wallet - The wallet provider instance for blockchain interactions
+   * @param args - Input arguments
+   * @returns A result message
    */
   @CreateAction({
     name: "redeem",
     description: `
       This action redeems assets from a selected vault. Before redeeming make sure you have the required lp tokens in your wallet using the positions action.
+      Even if you received the lp tokens from some other source, double-check the amount before redeeming.
       lp tokens aren't always 1:1 with the underlying asset, so make sure to check the amount of lp tokens you have before redeeming even if you know the amount of the underlying asset you want to redeem.
     `,
     schema: redeemActionSchema,
@@ -321,48 +261,27 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     wallet: EvmWalletProvider,
     args: z.infer<typeof redeemActionSchema>,
   ): Promise<string> {
-    console.log(args);
-    const decimals = await wallet.readContract({
-      address: args.assetAddress as Address,
-      abi: erc20Abi,
-      functionName: "decimals",
-    });
-    console.log(decimals);
-    const parsedAmount = BigInt(Math.floor(args.lpAmount * 10 ** decimals));
-    const params = new URLSearchParams({
-      network: args.network,
-      vaultAddress: args.vaultAddress,
-      assetAddress: args.assetAddress,
+    const actions = await fetchVaultActions({
+      action: "redeem",
+      args: { ...args, amount: await parseAssetAmount(wallet, args.assetAddress, args.amount) },
       sender: wallet.getAddress(),
-      amount: parsedAmount.toString(),
-      all: args.all ? "true" : "false",
+      apiKey: this.apiKey,
     });
-    const apiResult = await fetch(
-      `${VAULTS_API_URL}/transactions/vaults/redeem?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "x-api-key": this.apiKey,
-        },
-      },
-    );
-    const actions = (await apiResult.json()) as Actions;
-
-    const actionsAmount = actions.actions?.length || 0;
-    for (let i = actions.currentActionIndex; i < actionsAmount; i++) {
-      const action = actions.actions[i];
-      await wallet.sendTransaction({
-        ...action.tx,
-        value: action.tx.value ? BigInt(action.tx.value) : undefined,
-      });
+    if ("error" in actions) {
+      return `Failed to fetch redeem transactions: ${actions.error}, ${actions.message}`;
     }
+
+    await executeActions(wallet, actions);
+
     return "Redeem successful";
   }
 
   /**
+   * Claim rewards action
    *
-   * @param wallet
-   * @param args
+   * @param wallet - The wallet provider instance for blockchain interactions
+   * @param args - Input arguments
+   * @returns A result message
    */
   @CreateAction({
     name: "claim-rewards",
@@ -374,38 +293,26 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     schema: claimActionSchema,
   })
   async claim(wallet: EvmWalletProvider, args: z.infer<typeof claimActionSchema>): Promise<string> {
-    const params = new URLSearchParams({
-      network: args.network,
-      vaultAddress: args.vaultAddress,
-      assetAddress: args.assetAddress,
+    const actions = await fetchVaultActions({
+      action: "claim-rewards",
+      args,
       sender: wallet.getAddress(),
+      apiKey: this.apiKey,
     });
-    const apiResult = await fetch(
-      `${VAULTS_API_URL}/transactions/vaults/claim-rewards?${params.toString()}`,
-      {
-        method: "GET",
-        headers: {
-          "x-api-key": this.apiKey,
-        },
-      },
-    );
-    const actions = (await apiResult.json()) as Actions;
-
-    const actionsAmount = actions.actions?.length || 0;
-    for (let i = actions.currentActionIndex; i < actionsAmount; i++) {
-      const action = actions.actions[i];
-      await wallet.sendTransaction({
-        ...action.tx,
-        value: action.tx.value ? BigInt(action.tx.value) : undefined,
-      });
+    if ("error" in actions) {
+      return `Failed to fetch claim transactions: ${actions.error}, ${actions.message}`;
     }
+
+    await executeActions(wallet, actions);
+
     return "Claim successful";
   }
 
   /**
+   * Returns the users wallet token balances.
    *
-   * @param wallet
-   * @param args
+   * @param wallet - The wallet provider instance for blockchain interactions
+   * @returns A record of the users balances
    */
   @CreateAction({
     name: "user-wallet-balances",
@@ -414,7 +321,7 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     `,
     schema: z.object({}),
   })
-  async balances(wallet: EvmWalletProvider, args): Promise<string> {
+  async balances(wallet: EvmWalletProvider): Promise<string> {
     const params = new URLSearchParams({
       account: wallet.getAddress(),
     });
@@ -424,25 +331,32 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
         "x-api-key": this.apiKey,
       },
     });
-    const balances = (await result.json()) as Balances;
+    const balances = (await result.json()) as Balances | ApiError;
+    if ("error" in balances) {
+      return `Failed to fetch wallet balances: ${balances.error}, ${balances.message}`;
+    }
 
-    const entries = Object.entries(balances).map(([network, balances]: [string, any]) => {
-      return [
-        network,
-        balances.map(balance => ({
-          address: balance.address,
-          name: balance.name,
-          symbol: balance.symbol,
-          balance: Number(balance.balance) / 10 ** balance.decimals,
-        })),
-      ];
-    });
+    const entries = Object.entries(balances).map(
+      ([network, balances]: [string, Balances[string]]) => {
+        return [
+          network,
+          balances.map(balance => ({
+            address: balance.address,
+            name: balance.name,
+            symbol: balance.symbol,
+            balance: Number(balance.balance) / 10 ** balance.decimals,
+          })),
+        ];
+      },
+    );
     return JSON.stringify(Object.fromEntries(entries));
   }
 
   /**
+   * Returns the users positions.
    *
-   * @param wallet
+   * @param wallet - The wallet provider instance for blockchain interactions
+   * @returns A record of the users positions
    */
   @CreateAction({
     name: "positions",
@@ -458,7 +372,10 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
         "x-api-key": this.apiKey,
       },
     });
-    const positions = (await result.json()) as Positions;
+    const positions = (await result.json()) as Positions | ApiError;
+    if ("error" in positions) {
+      return `Failed to fetch positions: ${positions.error}, ${positions.message}`;
+    }
 
     const entries = Object.entries(positions).map(
       ([network, positions]: [string, Positions[string]]) => {
@@ -475,7 +392,11 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
             underlyingTokenBalance: Number(position.balanceNative) / 10 ** position.asset.decimals,
             lpTokenBalance: Number(position.balanceLp) / 10 ** position.asset.decimals,
             unclaimedRewards: Number(position.unclaimedUsd) > 0,
-            apy: position.apy,
+            apy: {
+              base: position.apy.base / 100,
+              rewards: position.apy.rewards / 100,
+              total: position.apy.total / 100,
+            },
           })),
         ];
       },
@@ -497,7 +418,7 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
 /**
  * Factory function to create a new VaultsfyiActionProvider instance.
  *
- * @param config
+ * @param config - Configuration options for the provider
  * @returns A new VaultsfyiActionProvider instance
  */
 export const vaultsfyiActionProvider = (config: VaultsfyiActionProviderConfig) =>
