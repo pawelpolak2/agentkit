@@ -3,6 +3,7 @@ import { claimActionSchema, depositActionSchema, redeemActionSchema } from "../s
 import { createSearchParams } from "../utils";
 import { VAULTS_API_URL } from "../constants";
 import { ApiError } from "./types";
+import { Address, Hex } from "viem";
 
 type FetchVaultActionsParams = (
   | {
@@ -25,8 +26,8 @@ type FetchVaultActionsParams = (
 export type Actions = {
   actions: {
     tx: {
-      to: `0x${string}`;
-      data: `0x${string}`;
+      to: Address;
+      data: Hex;
       value: string;
       chainId: number;
     };

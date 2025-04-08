@@ -1,7 +1,7 @@
 import { VaultsfyiActionProvider } from "./vaultsfyiActionProvider";
 import { Network } from "../../network";
 import { EvmWalletProvider } from "../../wallet-providers";
-import { VAULTS_NETWORKS } from "./constants";
+import { VAULTSFYI_SUPPORTED_CHAINS } from "./constants";
 
 const mockFetchResult = (status: number, data: object) => {
   return {
@@ -55,7 +55,6 @@ const mockVault = (num: number) => ({
       rewards: num,
       total: num,
     },
-    isTransactional: true,
     link: `https://app.vaults.fyi/opportunity/network-${num}/0x${num.toString(16).padStart(40, "0")}`,
   },
 });
@@ -94,7 +93,7 @@ describe("VaultsfyiActionProvider", () => {
 
   describe("network support", () => {
     it("should support all vaultsfyi networks", () => {
-      Object.keys(VAULTS_NETWORKS).forEach(network => {
+      Object.keys(VAULTSFYI_SUPPORTED_CHAINS).forEach(network => {
         expect(
           provider.supportsNetwork({
             protocolFamily: "evm",

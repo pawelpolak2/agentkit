@@ -1,4 +1,4 @@
-import { erc20Abi } from "viem";
+import { Address, erc20Abi } from "viem";
 import { EvmWalletProvider } from "../../wallet-providers";
 import { ApiVault } from "./api/vaults";
 import { Actions } from "./api/actions";
@@ -67,7 +67,7 @@ export async function parseAssetAmount(
   amount: number,
 ): Promise<number> {
   const decimals = await wallet.readContract({
-    address: assetAddress as `0x${string}`,
+    address: assetAddress as Address,
     abi: erc20Abi,
     functionName: "decimals",
   });

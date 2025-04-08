@@ -19,10 +19,9 @@ import {
   vaultsActionSchema,
 } from "./schemas";
 import { executeActions, getVaultsLink, parseAssetAmount } from "./utils";
-import { VAULTS_NETWORKS } from "./constants";
+import { VAULTSFYI_SUPPORTED_CHAINS, VAULTS_API_URL } from "./constants";
 import { fetchVaultActions } from "./api/actions";
 import { fetchVaults } from "./api/vaults";
-import { VAULTS_API_URL } from "./constants";
 import { ApiError, Balances, Positions } from "./api/types";
 
 /**
@@ -70,61 +69,23 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     name: "vaults",
     description: `
       This action returns a list of available vaults.
-      Arguments are:
-       - token: Optional. Name or symbol of the token to filter vaults by (string | undefined)
-       - network: Optional. Network name to filter vaults by (string). Supported networks: mainnet, arbitrum, optimism, polygon, base, gnosis, unichain (optional: leave empty for all networks)
-       - protocol: Optional. Protocol to filter vaults by (string) (default: all protocols). Some of the supported protocols are: yearn, euler, morpho, compound, aave, ajna
-       - minTvl: Optional. Minimum TVL to filter vaults by (number) (default: 100k)
-       - sort: Optional. Sort options:
-        * field: Sort field (string). Supported fields: tvl, apy
-        * direction: Sort direction (string). Supported directions: asc, desc
-       - take: Optional. Limit the number of results (number) (default: 10)
-       - page: Optional. Page number (number) (default: 1)
-       - transactionalOnly: Whether to include only vaults that you can transact on (e.g. deposit, redeem) using the vaultsfyi provider (boolean) (default: false)
       Small vaults (under 100k TVL) are probably best avoided as they may be more risky. Unless the user is looking for high-risk, high-reward opportunities, don't include them.
       When the user asks for best vaults, optimize for apy, and if the user asks for safest/reliable vaults, optimize for TVL.
-      If you intend to interact with the vaults later, set the transactionalOnly flag to true to filter out vaults that you can't transact on.
-      If you're only interested in viewing the vaults for analytics or research purposes, set the transactionalOnly flag to false for a wider selection of vaults.
-      Use the 'take' parameter to limit the number of results returned. Try to take a reasonable number of results so its easier to analyze the data. You can take more for analysis, but display a maximum of 5 results for the user.
-      If the user requests more results, you can use the 'page' parameter to fetch more pages of results. (remember to keep the same filters)
-      Returns: An object of schema:
-      {
-        totalResults: number, // Total number of results
-        nextPage: boolean, // Whether there are more results available
-        results: {
-          name: string; // Name of the vault
-          address: string; // Address of the vault
-          network: string; // Network of the vault
-          protocol: string; // Protocol of the vault
-          tvlInUsd: string; // TVL in USD
-          apy: {
-            base: number, // Base 7 day average APY
-            rewards?: number, // Rewards 7 day average APY (optional)
-            total: number, // Total 7 day average APY
-          }
-          token: { // deposit token details
-            address: string; // Address of the token
-            name: string; // Name of the token
-            symbol: string; // Symbol of the token
-          };
-          link: string; // Link to the vault on vaults.fyi
-          isTransactional: boolean; // Whether you can transact on the vault using the vaultsfyi provider, this is only for your information and should not be displayed unless the user asks about transacting on it
-        }[]
-      }
+      Try to take a reasonable number of results so its easier to analyze the data.
       Format result apys as: x% (base: x%, rewards: x%) if rewards apy is available, otherwise: x%
       Examples:
       User: "Show me the best vaults"
-      args: { sort: { field: 'apy', direction: 'desc' }, take: 5 } // token or network not specified so don't include in the args
+      args: { sort: { field: 'apy', direction: 'desc' }, take: 5 }
       User: "Show me the safest vaults"
-      args: { sort: { field: 'tvl', direction: 'desc' }, take: 5 } // token or network not specified so don't include in the args
+      args: { sort: { field: 'tvl', direction: 'desc' }, take: 5 }
       User: "Show me the best vaults on Arbitrum"
-      args: { network: 'arbitrum', sort: { field: 'apy', direction: 'desc' }, take: 5 } // token not specified so don't include in the args
+      args: { network: 'arbitrum', sort: { field: 'apy', direction: 'desc' }, take: 5 }
       User: "I want to earn yield on my usdc on base!"
-      args: { token: 'usdc', network: 'base', sort: { field: 'apy', direction: 'desc' }, take: 5, transactionalOnly: true } // user intends to interact with the vaults so set transactionalOnly to true
+      args: { token: 'usdc', network: 'base', sort: { field: 'apy', direction: 'desc' }, take: 5 }
       User: "What are some of the most profitable degen vaults on polygon"
-      args: { network: 'polygon', sort: { field: 'apy', direction: 'desc' }, take: 5, minTvl: 0 } // user is looking for high-risk, high-reward opportunities (degen) so set minTvl to 0
+      args: { network: 'polygon', sort: { field: 'apy', direction: 'desc' }, take: 5, minTvl: 0 }
       User: "Show me some more of those"
-      args: { network: 'polygon', sort: { field: 'apy', direction: 'desc' }, take: 5, minTvl: 0, page: 2 } // user requested more results so fetch the next page of results, Keep the filters from the previous request
+      args: { network: 'polygon', sort: { field: 'apy', direction: 'desc' }, take: 5, minTvl: 0, page: 2 }
     `,
     schema: vaultsActionSchema,
   })
@@ -160,7 +121,6 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
         symbol: vault.token.symbol,
       },
       link: getVaultsLink(vault),
-      isTransactional: vault.isTransactional,
     }));
 
     const filteredVaults = transformedVaults.filter(vault =>
@@ -200,8 +160,7 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
     name: "deposit",
     description: `
       This action deposits assets into a selected vault. Before depositing make sure you have the required assets in your wallet using the wallet-balances action.
-      Even if you received the balance from some other source, double-check the user balance and vault transactional status before depositing.
-      To use this action the vault MUST BE TRANSACTIONAL. You can check if a vault is transactional by looking at the isTransactional field in the vaults action.
+      Even if you received the balance from some other source, double-check the user balance.
       Use examples:
       User: "Deposit 1000 USDC into the vault"
       actions:
@@ -284,7 +243,7 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
    * @returns A result message
    */
   @CreateAction({
-    name: "claim-rewards",
+    name: "claim_rewards",
     description: `
       This action claims rewards from a selected vault.
       assetAddress is the address of the vaults underlying token.
@@ -315,9 +274,13 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
    * @returns A record of the users balances
    */
   @CreateAction({
-    name: "user-wallet-balances",
+    name: "user_wallet_balances",
     description: `
-    This action returns the users wallet token balances. It returns a record of all erc20 tokens without the need to provide their addresses.
+    This action returns the users wallet balances of all tokens supported by vaults.fyi. Useful when you don't know token addresses but want to check if the user has an asset.
+    Example queries:
+    User: "What tokens do I have?"
+    User: "What tokens do I have on Arbitrum?"
+    User: "Whats my balance of USDC?"
     `,
     schema: z.object({}),
   })
@@ -361,7 +324,12 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
   @CreateAction({
     name: "positions",
     description: `
-      This action returns the users positions.
+      This action returns the users positions in vaults.
+      Example queries:
+      User: "Show me my positions"
+      User: "What vaults am i invested in?"
+      User: "What's my average yield?"
+      User: "What vaults do I have rewards in?"
     `,
     schema: z.object({}),
   })
@@ -411,7 +379,10 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
    * @returns True if the network is supported
    */
   supportsNetwork(network: Network): boolean {
-    return network.chainId ? Object.keys(VAULTS_NETWORKS).includes(network.chainId) : false;
+    return (
+      network.protocolFamily == "evm" &&
+      (network.chainId ? Object.keys(VAULTSFYI_SUPPORTED_CHAINS).includes(network.chainId) : false)
+    );
   }
 }
 

@@ -1,5 +1,5 @@
 export const VAULTS_API_URL = "https://api.vaults.fyi/v1";
-export const VAULTS_NETWORKS = {
+export const VAULTSFYI_SUPPORTED_CHAINS = {
   1: "mainnet",
   42161: "arbitrum",
   10: "optimism",
@@ -9,4 +9,4 @@ export const VAULTS_NETWORKS = {
   130: "unichain",
   1923: "swellchain",
   42220: "celo",
-};
+} as const;

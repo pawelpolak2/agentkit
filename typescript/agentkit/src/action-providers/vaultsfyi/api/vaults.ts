@@ -55,7 +55,7 @@ export async function fetchVaults(
     token: args.token,
     network: args.network,
     tvl_min: args.minTvl ?? 100_000,
-    transactional_only: args.transactionalOnly,
+    transactional_only: true,
   });
   for (let i = 0; i < 10; i++) {
     const response = await fetch(`${VAULTS_API_URL}/detailed/vaults?${params}`, {

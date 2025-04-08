@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VAULTSFYI_SUPPORTED_CHAINS } from "./constants";
 
 /**
  * Action schemas for the vaultsfyi action provider.
@@ -7,102 +8,47 @@ import { z } from "zod";
  * rules for action parameters in the vaultsfyi action provider.
  */
 
-const networkSchema = z.enum([
-  "mainnet",
-  "arbitrum",
-  "optimism",
-  "polygon",
-  "base",
-  "gnosis",
-  "unichain",
-]);
+const networkSchema = z.enum(Object.values(VAULTSFYI_SUPPORTED_CHAINS) as [string, ...string[]]);
 
 /**
  * Vaults list action schema.
  */
 export const vaultsActionSchema = z.object({
-  /**
-   * Optional: Name or symbol of the token to filter vaults by
-   */
-  token: z.string().optional(),
-
-  /**
-   * Optional: Protocol to filter vaults by
-   */
-  protocol: z.string().optional(),
-
-  /**
-   * Optional: Network name to filter vaults by
-   * Supported networks: mainnet, arbitrum, optimism, polygon, base, gnosis, unichain
-   */
-  network: networkSchema.optional(),
-
-  /**
-   * Optional: Minimum TVL to filter vaults by
-   */
-  minTvl: z.number().optional(),
-
-  /**
-   * Whether to include only vaults that you can transact on (e.g. deposit, redeem) using the vaultsfyi provider
-   */
-  transactionalOnly: z.boolean().optional(),
-
-  /**
-   * Sort options
-   */
+  token: z
+    .string()
+    .optional()
+    .describe("Optional: Name or symbol of the token to filter vaults by"),
+  protocol: z.string().optional().describe("Optional: Protocol to filter vaults by"),
+  network: networkSchema
+    .optional()
+    .describe(
+      "Optional: Network name to filter vaults by. Supported networks: mainnet, arbitrum, optimism, polygon, base, gnosis, unichain",
+    ),
+  minTvl: z.number().optional().describe("Optional: Minimum TVL to filter vaults by"),
   sort: z
     .object({
-      /**
-       * Sort field
-       */
-      field: z.enum(["tvl", "apy", "name"]).optional(),
-
-      /**
-       * Sort direction
-       */
-      direction: z.enum(["asc", "desc"]).optional(),
+      field: z.enum(["tvl", "apy", "name"]).optional().describe("Sort field"),
+      direction: z.enum(["asc", "desc"]).optional().describe("Sort direction"),
     })
-    .optional(),
-
-  /**
-   * Optional: Limit the number of results
-   */
-  take: z.number().optional(),
-
-  /**
-   * Optional: Page number
-   */
-  page: z.number().optional(),
+    .optional()
+    .describe("Sort options"),
+  take: z.number().optional().describe("Optional: Limit the number of results"),
+  page: z.number().optional().describe("Optional: Page number"),
 });
 
 /**
  * Base transaction params schema.
  */
 const transactionActionSchema = z.object({
-  /**
-   * The address of the vault to interact with
-   */
-  vaultAddress: z.string(),
-  /**
-   * The address of the vaults underlying token
-   */
-  assetAddress: z.string(),
-  /**
-   * The network of the vault
-   */
-  network: networkSchema,
-  /**
-   * The amount of assets to use
-   */
-  amount: z.number(),
+  vaultAddress: z.string().describe("The address of the vault to interact with"),
+  assetAddress: z.string().describe("The address of the vault's underlying token"),
+  network: networkSchema.describe("The network of the vault"),
+  amount: z.number().describe("The amount of assets to use"),
 });
 
 export const depositActionSchema = transactionActionSchema;
 export const redeemActionSchema = transactionActionSchema.extend({
-  /**
-   * Should redeem all assets
-   */
-  all: z.boolean().optional(),
+  all: z.boolean().optional().describe("Should redeem all assets"),
 });
 export const claimActionSchema = transactionActionSchema.omit({
   amount: true,
