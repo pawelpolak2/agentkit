@@ -1,5 +1,5 @@
 import z from "zod";
-import { vaultsActionSchema } from "../schemas";
+import { VaultsActionSchema } from "../schemas";
 import { createSearchParams } from "../utils";
 import { VAULTS_API_URL } from "../constants";
 import { ApiError } from "./types";
@@ -45,7 +45,7 @@ type ApiResult = {
  * @returns The list of vaults
  */
 export async function fetchVaults(
-  args: z.infer<typeof vaultsActionSchema>,
+  args: z.infer<typeof VaultsActionSchema>,
   apiKey: string,
 ): Promise<ApiVault[] | ApiError> {
   const vaults: ApiVault[] = [];

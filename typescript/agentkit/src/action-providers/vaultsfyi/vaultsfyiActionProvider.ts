@@ -16,7 +16,7 @@ import {
   claimActionSchema,
   depositActionSchema,
   redeemActionSchema,
-  vaultsActionSchema,
+  VaultsActionSchema,
 } from "./schemas";
 import { executeActions, getVaultsLink, parseAssetAmount } from "./utils";
 import { VAULTSFYI_SUPPORTED_CHAINS, VAULTS_API_URL } from "./constants";
@@ -87,11 +87,11 @@ export class VaultsfyiActionProvider extends ActionProvider<EvmWalletProvider> {
       User: "Show me some more of those"
       args: { network: 'polygon', sort: { field: 'apy', direction: 'desc' }, take: 5, minTvl: 0, page: 2 }
     `,
-    schema: vaultsActionSchema,
+    schema: VaultsActionSchema,
   })
   async vaults(
     wallet: EvmWalletProvider,
-    args: z.infer<typeof vaultsActionSchema>,
+    args: z.infer<typeof VaultsActionSchema>,
   ): Promise<string> {
     const vaults = await fetchVaults(args, this.apiKey);
     if ("error" in vaults) {

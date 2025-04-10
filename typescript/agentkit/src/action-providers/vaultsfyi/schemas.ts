@@ -8,22 +8,20 @@ import { VAULTSFYI_SUPPORTED_CHAINS } from "./constants";
  * rules for action parameters in the vaultsfyi action provider.
  */
 
-const networkSchema = z.enum(Object.values(VAULTSFYI_SUPPORTED_CHAINS) as [string, ...string[]]);
+const NetworkSchema = z.enum(Object.values(VAULTSFYI_SUPPORTED_CHAINS) as [string, ...string[]]);
 
 /**
  * Vaults list action schema.
  */
-export const vaultsActionSchema = z.object({
+export const VaultsActionSchema = z.object({
   token: z
     .string()
     .optional()
     .describe("Optional: Name or symbol of the token to filter vaults by"),
   protocol: z.string().optional().describe("Optional: Protocol to filter vaults by"),
-  network: networkSchema
-    .optional()
-    .describe(
-      "Optional: Network name to filter vaults by. Supported networks: mainnet, arbitrum, optimism, polygon, base, gnosis, unichain",
-    ),
+  network: NetworkSchema.optional().describe(
+    "Optional: Network name to filter vaults by. Supported networks: mainnet, arbitrum, optimism, polygon, base, gnosis, unichain",
+  ),
   minTvl: z.number().optional().describe("Optional: Minimum TVL to filter vaults by"),
   sort: z
     .object({
@@ -39,17 +37,17 @@ export const vaultsActionSchema = z.object({
 /**
  * Base transaction params schema.
  */
-const transactionActionSchema = z.object({
+const TransactionActionSchema = z.object({
   vaultAddress: z.string().describe("The address of the vault to interact with"),
   assetAddress: z.string().describe("The address of the vault's underlying token"),
-  network: networkSchema.describe("The network of the vault"),
+  network: NetworkSchema.describe("The network of the vault"),
   amount: z.number().describe("The amount of assets to use"),
 });
 
-export const depositActionSchema = transactionActionSchema;
-export const redeemActionSchema = transactionActionSchema.extend({
+export const depositActionSchema = TransactionActionSchema;
+export const redeemActionSchema = TransactionActionSchema.extend({
   all: z.boolean().optional().describe("Should redeem all assets"),
 });
-export const claimActionSchema = transactionActionSchema.omit({
+export const claimActionSchema = TransactionActionSchema.omit({
   amount: true,
 });
